@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    container_name: system-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      # Montar arquivos YAML externos
+      - ./dashboard.yaml:/app/data/dashboard.yaml:ro
+      - ./bookmarks.yaml:/app/data/bookmarks.yaml:ro
+      # Montar sistema de arquivos para monitoramento (read-only)
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+      # Montar pontos de montagem específicos
+      - /boot/efi:/mnt/sistema:ro
+      - /mnt/midias:/mnt/midia:ro
+    environment:
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ROOT=/host/root
+      # Definir discos a monitorar
+      - DISK1_PATH=/mnt/sistema
+      - DISK2_PATH=/mnt/midia
+      - DISK1_NAME=Sistema
+      - DISK2_NAME=Midia
+    restart: unless-stopped
+    privileged: true # Necessário para acessar informações do sistema
+    networks:
+      - dashboard-net
+
+networks:
+  dashboard-net:
+    driver: bridge

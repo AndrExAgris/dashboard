@@ -1,0 +1,21 @@
+Dashboard:
+  - name: Pihole
+    descricao: "DNS"
+    url: http://100.100.1.1:8060
+    iconurl: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/pi-hole.svg
+    tags: [dns]
+  - name: Jellyfin
+    descricao: "Porque 5 streamings da 200 reais..."
+    url: http://100.100.1.1:8096
+    iconurl: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/jellyfin.svg
+    tags: [mídia, streaming, pirataria]
+  - name: NextCloud
+    descricao: "Armazenamento de arquivos pessoal."
+    url: http://100.100.1.1:8080
+    iconurl: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nextcloud-white.svg
+    tags: [cloud, arquivos, office]
+  - name: Overleaf
+    descricao: "Se os trabalhos ficarem grandes demais"
+    url: http://100.100.1.1:8050
+    iconurl: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/overleaf.svg
+    tags: [trabalhos, latex]

@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homelab do palhaço</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTMgMTJMMTIgM0wyMSAxMlYyMEMyMSAyMC41NTIzIDIwLjU1MjMgMjEgMjAgMjFINEM0IDIxIDMgMjAuNTUyMyAzIDIwVjEyWiIgc3Ryb2tlPSIjZjk3MzE2IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8cGF0aCBkPSJNOSAxNkMxMCAxNiAxNCAxNiAxNSAxNlY5QzE1IDkgMTEgOSA5IDlaIiBzdHJva2U9IiNmOTczMTYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            color: #d1d5db;
+            /* Background com GIF aleatório - será definido via JavaScript */
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            /* Fallback para cor sólida caso nenhum GIF seja encontrado */
+            background-color: #111111;
+        }
+
+        /* Overlay escuro sobre o background para melhor legibilidade */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .dashboard-block, .category-block {
+            transition: all 0.3s ease-in-out;
+            backdrop-filter: blur(10px);
+        }
+
+        .dashboard-block:hover {
+            transform: translateY(-3px);
+            background-color: rgba(39, 39, 42, 0.8);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Transparências para as caixas principais */
+        .main-container {
+            background-color: rgba(39, 39, 42, 0.4);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Transparências para tags e elementos menores */
+        .tag-transparent {
+            background-color: rgba(82, 82, 91, 0.6);
+        }
+
+        .search-transparent {
+            background-color: rgba(39, 39, 42, 0.6);
+            border-color: rgba(113, 113, 122, 0.6);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(39, 39, 42, 0.5);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #f97316;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ea580c;
+        }
+
+        #favoritesContainer {
+            column-count: 1;
+            column-gap: 1.5rem;
+        }
+
+        @media (min-width: 640px) { 
+            #favoritesContainer { column-count: 2; } 
+        }
+
+        @media (min-width: 1024px) { 
+            #favoritesContainer { column-count: 3; } 
+        }
+
+        @media (min-width: 1536px) { 
+            #favoritesContainer { column-count: 4; } 
+        }
+
+        .category-block {
+            break-inside: avoid;
+            margin-bottom: 1.5rem;
+            width: 100%;
+            display: inline-block;
+        }
+
+        .progress-bar-inner {
+            transition: width 0.5s ease-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .animate-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        .metric-value {
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Títulos com tamanho consistente */
+        .section-title {
+            font-size: 2.25rem; /* text-4xl equivalente */
+            line-height: 2.5rem;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container mx-auto p-4 md:p-8">
+        <div class="flex flex-col lg:flex-row gap-8 mb-16">
+            
+            <div class="w-full lg:w-2/3">
+                <div id="dashboardSection">
+                    <header class="mb-8 text-center lg:text-left">
+                        <h1 class="section-title font-bold text-white">Dashboard do Servidor</h1>
+                    </header>
+                    <main id="dashboardContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="animate-pulse main-container rounded-lg p-4 h-32"></div>
+                        <div class="animate-pulse main-container rounded-lg p-4 h-32"></div>
+                    </main>
+                </div>
+            </div>
+
+            <div class="w-full lg:w-1/3">
+                <div class="sticky top-8">
+                    <h2 class="section-title font-bold text-white text-center lg:text-left mb-8">Monitor do Sistema</h2>
+                    <div id="systemMonitor" class="space-y-6 main-container rounded-lg p-6">
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="font-bold text-orange-500">CPU</span>
+                                <div class="text-sm text-zinc-400">
+                                    <span id="cpuUsageText" class="metric-value">0</span>%
+                                    <span id="cpuTemp" class="text-xs ml-2"></span>
+                                </div>
+                            </div>
+                            <div class="w-full bg-zinc-700/50 rounded-full h-4">
+                                <div id="cpuProgressBar" class="progress-bar-inner h-4 rounded-full bg-orange-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="font-bold text-orange-500">RAM</span>
+                                <span id="ramUsageText" class="text-sm text-zinc-400 metric-value">0 GB / 0 GB</span>
+                            </div>
+                            <div class="w-full bg-zinc-700/50 rounded-full h-4">
+                                <div id="ramProgressBar" class="progress-bar-inner h-4 rounded-full bg-green-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="font-bold text-orange-500" id="disk1Name">HD 1</span>
+                                <span id="disk1UsageText" class="text-sm text-zinc-400 metric-value">0 GB / 0 GB</span>
+                            </div>
+                            <div class="w-full bg-zinc-700/50 rounded-full h-4">
+                                <div id="disk1ProgressBar" class="progress-bar-inner h-4 rounded-full bg-sky-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="font-bold text-orange-500" id="disk2Name">HD 2</span>
+                                <span id="disk2UsageText" class="text-sm text-zinc-400 metric-value">0 GB / 0 GB</span>
+                            </div>
+                            <div class="w-full bg-zinc-700/50 rounded-full h-4">
+                                <div id="disk2ProgressBar" class="progress-bar-inner h-4 rounded-full bg-purple-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div class="border-t border-zinc-700/50 pt-4 space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-zinc-400">Rede ↓↑</span>
+                                <span id="networkInfo" class="text-zinc-300 metric-value">0 KB/s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="favoritesSection">
+            <header class="mb-8 text-center">
+                <h1 class="section-title font-bold text-white">Favoritos</h1>
+                <div class="max-w-xl mx-auto mt-4">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Pesquisar por título, tag ou categoria..."
+                        class="w-full px-4 py-3 search-transparent border-2 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent backdrop-filter backdrop-blur-sm"
+                    >
+                </div>
+            </header>
+            <main id="favoritesContainer" class="min-h-[200px]">
+                <div class="animate-pulse main-container rounded-lg p-6 h-48"></div>
+            </main>
+        </div>
+
+        <div id="noResultsMessage" class="hidden text-center py-16">
+            <p class="text-xl text-gray-400">Nenhum resultado encontrado.</p>
+        </div>
+    </div>
+
+    <script>
+        // Variáveis globais
+        let ws = null;
+        let reconnectTimeout = null;
+        let dashboardData = null;
+        let favoritesData = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 5;
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', async () => {
+            setRandomBackground();
+            await loadData();
+            connectWebSocket();
+            setupSearch();
+            setupFavoritesActions();
+        });
+
+        // Função para definir background aleatório
+        async function setRandomBackground() {
+            try {
+                const response = await fetch('/api/random-background');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.backgroundUrl) {
+                        document.body.style.backgroundImage = `url('${data.backgroundUrl}')`;
+                        console.log('Background definido:', data.backgroundUrl);
+                    }
+                } else {
+                    console.log('Nenhum background encontrado, usando cor padrão');
+                }
+            } catch (error) {
+                console.log('Erro ao carregar background, usando cor padrão:', error.message);
+            }
+        }
+
+        // Carregar dados YAML com cache e tratamento de erro melhorado
+        async function loadData() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+                const [dashboardRes, bookmarksRes] = await Promise.all([
+                    fetch('/api/dashboard', { signal: controller.signal }),
+                    fetch('/api/bookmarks', { signal: controller.signal })
+                ]);
+
+                clearTimeout(timeoutId);
+
+                if (!dashboardRes.ok || !bookmarksRes.ok) {
+                    throw new Error(`HTTP Error: ${dashboardRes.status} / ${bookmarksRes.status}`);
+                }
+
+                dashboardData = await dashboardRes.json();
+                favoritesData = await bookmarksRes.json();
+
+                renderDashboard(dashboardData?.Dashboard || []);
+                renderFavorites(favoritesData?.categories || []);
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                showError('Erro ao carregar configurações');
+                
+                // Renderizar placeholders em caso de erro
+                renderDashboard([]);
+                renderFavorites([]);
+            }
+        }
+
+        // WebSocket com reconexão exponencial melhorada
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                const connectionTimeout = setTimeout(() => {
+                    if (ws.readyState === WebSocket.CONNECTING) {
+                        ws.close();
+                    }
+                }, 5000);
+
+                ws.onopen = () => {
+                    console.log('WebSocket conectado');
+                    clearTimeout(connectionTimeout);
+                    clearTimeout(reconnectTimeout);
+                    reconnectAttempts = 0;
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        updateSystemMonitor(data);
+                    } catch (error) {
+                        console.error('Erro ao processar dados WebSocket:', error);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('Erro WebSocket:', error);
+                    clearTimeout(connectionTimeout);
+                };
+
+                ws.onclose = () => {
+                    console.log('WebSocket desconectado');
+                    clearTimeout(connectionTimeout);
+                    scheduleReconnect();
+                };
+
+            } catch (error) {
+                console.error('Erro ao criar WebSocket:', error);
+                scheduleReconnect();
+            }
+        }
+
+        function scheduleReconnect() {
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                reconnectAttempts++;
+                
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = setTimeout(connectWebSocket, delay);
+                console.log(`Tentativa de reconexão ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} em ${delay}ms`);
+            } else {
+                console.log('Máximo de tentativas de reconexão atingido');
+            }
+        }
+
+        // Atualizar monitor de sistema com validação aprimorada
+        function updateSystemMonitor(data) {
+            if (!data || typeof data !== 'object') return;
+
+            // CPU
+            if (data.cpu) {
+                updateProgressBar('cpu', parseFloat(data.cpu.usage) || 0, parseFloat(data.cpu.temp));
+            }
+            
+            // RAM
+            if (data.memory) {
+                const ramUsedGB = (data.memory.used / 1073741824).toFixed(1);
+                const ramTotalGB = (data.memory.total / 1073741824).toFixed(1);
+                document.getElementById('ramUsageText').textContent = `${ramUsedGB} GB / ${ramTotalGB} GB`;
+                updateProgressBar('ram', parseFloat(data.memory.percent) || 0);
+            }
+            
+            // Discos
+            updateDiskInfo('disk1', data.disk1);
+            updateDiskInfo('disk2', data.disk2);
+            
+            // Rede
+            if (data.network) {
+                const download = (data.network.download / 1024).toFixed(1);
+                const upload = (data.network.upload / 1024).toFixed(1);
+                document.getElementById('networkInfo').textContent = `↓${download} ↑${upload} KB/s`;
+            }
+        }
+
+        function updateDiskInfo(diskId, diskData) {
+            if (!diskData) return;
+
+            const nameEl = document.getElementById(`${diskId}Name`);
+            const textEl = document.getElementById(`${diskId}UsageText`);
+            
+            if (nameEl) nameEl.textContent = diskData.name || diskId.toUpperCase();
+            
+            if (diskData.total > 0) {
+                const usedGB = (diskData.used / 1073741824).toFixed(1);
+                const totalGB = (diskData.total / 1073741824).toFixed(1);
+                if (textEl) textEl.textContent = `${usedGB} GB / ${totalGB} GB`;
+                updateProgressBar(diskId, parseFloat(diskData.percent) || 0);
+            } else {
+                if (textEl) textEl.textContent = 'Não disponível';
+                updateProgressBar(diskId, 0);
+            }
+        }
+
+        function updateProgressBar(type, percent, temp = null) {
+            const bar = document.getElementById(`${type}ProgressBar`);
+            const text = document.getElementById(`${type}UsageText`);
+            
+            if (!bar) return;
+
+            if (type === 'cpu') {
+                if (text) text.textContent = percent.toFixed(1);
+                if (temp && temp > 0) {
+                    const tempEl = document.getElementById('cpuTemp');
+                    if (tempEl) tempEl.textContent = `${temp.toFixed(0)}°C`;
+                }
+            }
+            
+            bar.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
+            
+            // Atualizar cores baseado no uso
+            bar.className = 'progress-bar-inner h-4 rounded-full';
+            const colorMap = {
+                'cpu': ['bg-green-500', 'bg-orange-500', 'bg-red-500'],
+                'ram': ['bg-green-500', 'bg-yellow-500', 'bg-red-500'],
+                'disk1': ['bg-sky-500', 'bg-yellow-500', 'bg-red-500'],
+                'disk2': ['bg-purple-500', 'bg-yellow-500', 'bg-red-500']
+            };
+            
+            const colors = colorMap[type] || ['bg-gray-500'];
+            if (percent < 50) {
+                bar.classList.add(colors[0]);
+            } else if (percent < 80) {
+                bar.classList.add(colors[1]);
+            } else {
+                bar.classList.add(colors[2]);
+            }
+        }
+
+        // Renderizar dashboard com tratamento de erro
+        function renderDashboard(items) {
+            const container = document.getElementById('dashboardContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            if (!items || !Array.isArray(items) || items.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-gray-400 p-8">Nenhum item do dashboard encontrado</div>';
+                return;
+            }
+            
+            items.forEach(item => {
+                if (!item.url || !item.name) return;
+
+                const block = document.createElement('a');
+                block.href = item.url;
+                block.target = '_blank';
+                block.rel = 'noopener noreferrer';
+                block.className = 'dashboard-block main-container rounded-lg p-4 flex flex-col sm:flex-row sm:items-start gap-4 shadow-lg hover:shadow-xl';
+                
+                const faviconUrl = item.iconurl || `https://www.google.com/s2/favicons?sz=32&domain_url=${item.url}`;
+                block.innerHTML = `
+                    <div class="w-16 h-16 mx-auto sm:mx-0 flex-shrink-0 flex items-center justify-center bg-zinc-700/50 rounded-lg">
+                        <img src="${faviconUrl}" alt="${item.name}" class="w-12 h-12 object-contain rounded-lg" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjNGY0ZjRmIi8+CjxwYXRoIGQ9Ik0xMiA2VjE4TTE2IDEwSDhIMTZaIiBzdHJva2U9IiNhYWFhYWEiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo='">
+                    </div>
+                    <div class="flex-grow text-center sm:text-left">
+                        <h3 class="font-bold text-lg text-orange-500">${item.name}</h3>
+                        <p class="text-xs text-zinc-400 truncate">${item.url}</p>
+                        <p class="text-sm text-zinc-300 mt-2">${item.descricao || ''}</p>
+                        ${(item.tags && item.tags.length > 0) ? `
+                        <div class="flex flex-wrap gap-1 mt-3 justify-center sm:justify-start">
+                            ${item.tags.map(tag => `<span class="text-xs tag-transparent text-orange-400 px-2 py-0.5 rounded-full">${tag}</span>`).join('')}
+                        </div>` : ''}
+                    </div>`;
+                
+                container.appendChild(block);
+            });
+        }
+
+        // Renderizar favoritos com tratamento aprimorado
+        function renderFavorites(categories) {
+            const container = document.getElementById('favoritesContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            if (!categories || !Array.isArray(categories) || categories.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-400 p-8">Nenhuma categoria de favoritos encontrada</div>';
+                return;
+            }
+            
+            categories.forEach(category => {
+                if (!category.name) return;
+
+                const categoryBlock = document.createElement('div');
+                categoryBlock.className = 'category-block main-container rounded-lg p-5';
+                categoryBlock.dataset.categoryName = category.name.toLowerCase();
+                
+                categoryBlock.innerHTML = `<h2 class="text-2xl font-bold text-orange-500 mb-5">${category.name}</h2>`;
+                
+                if (category.lists && Array.isArray(category.lists)) {
+                    category.lists.forEach(list => {
+                        if (!list.name) return;
+
+                        const listContainer = document.createElement('div');
+                        listContainer.className = 'mb-4';
+                        listContainer.dataset.listName = list.name.toLowerCase();
+                        
+                        const listHeader = document.createElement('div');
+                        listHeader.className = 'flex justify-between items-center mb-3 border-b border-zinc-700/50 pb-1';
+
+                        listHeader.innerHTML = `
+                            <h3 class="text-lg font-semibold text-gray-300">${list.name}</h3>
+                            <button class="open-all-links-btn p-1 text-gray-400 hover:text-orange-500 transition-colors" title="Abrir todos os links de ${list.name}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                                </svg>
+                            </button>
+                        `;
+                        listContainer.appendChild(listHeader);
+                        
+                        if (list.items && Array.isArray(list.items)) {
+                            list.items.forEach(item => {
+                                if (!item.url || !item.title) return;
+
+                                const itemElement = document.createElement('a');
+                                itemElement.href = item.url;
+                                itemElement.target = '_blank';
+                                itemElement.rel = 'noopener noreferrer';
+                                itemElement.className = 'favorite-item flex items-center p-2 rounded-md hover:bg-black/20 transition-colors';
+                                itemElement.dataset.title = item.title.toLowerCase();
+                                itemElement.dataset.tags = (item.tags || []).join(' ').toLowerCase();
+                                
+                                const faviconUrl = `https://www.google.com/s2/favicons?sz=32&domain_url=${item.url}`;
+                                itemElement.innerHTML = `
+                                    <img src="${faviconUrl}" alt="${item.title}" class="w-5 h-5 mr-3 rounded-sm" onerror="this.style.display='none'">
+                                    <div class="flex-grow">
+                                        <p class="text-gray-100 font-medium">${item.title}</p>
+                                        ${(item.tags && item.tags.length > 0) ? `
+                                        <div class="flex flex-wrap gap-1 mt-1">
+                                            ${item.tags.map(tag => `<span class="text-xs tag-transparent text-orange-400 px-2 py-0.5 rounded-full">${tag}</span>`).join('')}
+                                        </div>` : ''}
+                                    </div>`;
+                                
+                                listContainer.appendChild(itemElement);
+                            });
+                        }
+                        
+                        categoryBlock.appendChild(listContainer);
+                    });
+                }
+                
+                container.appendChild(categoryBlock);
+            });
+        }
+
+        // Event listener otimizado com delegação de eventos
+        function setupFavoritesActions() {
+            const favoritesContainer = document.getElementById('favoritesContainer');
+            if (!favoritesContainer) return;
+            
+            favoritesContainer.addEventListener('click', (event) => {
+                const openAllButton = event.target.closest('.open-all-links-btn');
+                
+                if (openAllButton) {
+                    event.preventDefault();
+                    
+                    const listContainer = openAllButton.closest('.mb-4');
+                    if (listContainer) {
+                        const linksToOpen = listContainer.querySelectorAll('.favorite-item[href]');
+                        
+                        if (linksToOpen.length === 0) return;
+
+                        if (linksToOpen.length > 10) {
+                            if (!confirm(`Você está prestes a abrir ${linksToOpen.length} links. Continuar?`)) {
+                                return;
+                            }
+                        }
+                        
+                        linksToOpen.forEach((link, index) => {
+                            setTimeout(() => {
+                                window.open(link.href, '_blank', 'noopener,noreferrer');
+                            }, index * 100); // Pequeno delay para evitar bloqueio do navegador
+                        });
+                    }
+                }
+            });
+        }
+
+        // Busca otimizada com debounce
+        function setupSearch() {
+            const searchInput = document.getElementById('searchInput');
+            if (!searchInput) return;
+
+            let debounceTimer;
+            searchInput.addEventListener('input', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(handleSearch, 300);
+            });
+        }
+
+        function handleSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const categoryBlocks = document.querySelectorAll('.category-block');
+            const noResultsMessage = document.getElementById('noResultsMessage');
+            let totalVisibleBlocks = 0;
+            
+            categoryBlocks.forEach(block => {
+                let isBlockVisible = false;
+                const items = block.querySelectorAll('.favorite-item');
+                
+                items.forEach(item => {
+                    const isMatch = searchTerm === '' ||
+                                  (item.dataset.title && item.dataset.title.includes(searchTerm)) || 
+                                  (item.dataset.tags && item.dataset.tags.includes(searchTerm)) || 
+                                  (block.dataset.categoryName && block.dataset.categoryName.includes(searchTerm));
+                    
+                    item.style.display = isMatch ? 'flex' : 'none';
+                    if(isMatch) isBlockVisible = true;
+                });
+                
+                block.style.display = isBlockVisible ? 'block' : 'none';
+                if(isBlockVisible) totalVisibleBlocks++;
+            });
+            
+            if (noResultsMessage) {
+                noResultsMessage.classList.toggle('hidden', totalVisibleBlocks > 0 || searchTerm === '');
+            }
+        }
+
+        function showError(message) {
+            console.error(message);
+            // Você pode adicionar uma notificação visual aqui se desejar
+        }
+
+        // Limpeza na saída da página
+        window.addEventListener('beforeunload', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+            clearTimeout(reconnectTimeout);
+        });
+    </script>
+</body>
+</html>

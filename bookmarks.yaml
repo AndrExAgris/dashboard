@@ -1,0 +1,283 @@
+categories:
+  - name: Estudo
+    lists:
+      - name: Universidade
+        items:
+          - title: SIGA UDESC
+            url: https://siga.udesc.br/
+            tags: [udesc]
+          - title: Moodle UDESC Joinville
+            url: https://moodle.joinville.udesc.br
+            tags: [udesc, moodle]
+          - title: Outlook Mail
+            url: https://outlook.office.com/mail/
+            tags: [email]
+      - name: Pesquisa e Leitura
+        items:
+          - title: Sci-Hub
+            url: https://sci-hub.se
+            tags: [papers, pesquisa]
+          - title: Annas Archive
+            url: https://annas-archive.org/
+            tags: [livros, pesquisa]
+      - name: Trabalhos e Apresentações
+        items:
+          - title: Overleaf
+            url: https://www.overleaf.com/
+            tags: [latex]
+          - title: Google Slides
+            url: https://docs.google.com/presentation/u/0/
+            tags: [slides, docs]
+      - name: Inteligência Artificial
+        items:
+          - title: Google NotebookLM
+            url: https://notebooklm.google.com
+            tags: [ai, notebook]
+          - title: Gemini AI
+            url: https://gemini.google.com
+            tags: [ai]
+          - title: Claude AI
+            url: https://claude.ai
+            tags: [ai]
+          - title: ChatGPT
+            url: https://chatgpt.com
+            tags: [ai]
+      - name: Outros
+        items:
+          - title: Google Colab
+            url: https://colab.research.google.com
+            tags: [código, notebooks]
+          - title: Wolfram Alpha
+            url: https://www.wolframalpha.com/
+            tags: [matemática]
+          - title: Number Empire 42
+            url: https://www.numberempire.com/42
+            tags: [matemática]
+  
+  - name: Mídia
+    lists:
+      - name: Música
+        items:
+          - title: YouTube Music
+            url: https://music.youtube.com
+            tags: [streaming, música]
+          - title: Radiooooo
+            url: https://app.radiooooo.com/
+            tags: [rádio]
+          - title: EveryNoise
+            url: https://everynoise.com/
+            tags: [estilo musical, descoberta]
+      - name: Vídeo
+        items:
+          - title: YouTube
+            url: https://youtube.com
+            tags: [streaming, vídeos]
+          - title: Netflix
+            url: https://netflix.com
+            tags: [filmes, séries]
+          - title: Prime Video
+            url: https://primevideo.com
+            tags: [filmes, séries]
+          - title: Disney+
+            url: https://disneyplus.com
+            tags: [filmes, séries]
+
+  - name: Tecnologia
+    lists:
+      - name: Desenvolvimento
+        items:
+          - title: GitHub
+            url: https://github.com/AndrExAgris
+            tags: [código, versionamento]
+          - title: DevDocs
+            url: https://devdocs.io/
+            tags: [documentação, desenvolvimento]
+          - title: Awesome Lists
+            url: https://aweswome.re/
+            tags: [recursos, listas]
+          - title: Free For Dev
+            url: https://free-for.dev/#/
+            tags: [recursos, desenvolvimento]
+          - title: Choose a License
+            url: https://choosealicense.com/
+            tags: [licenças, código]
+          - title: TLDR Legal
+            url: https://www.tldrlegal.com/
+            tags: [licenças, resumo]
+
+  - name: Hobbies
+    lists:
+      - name: Boardgames
+        items:
+          - title: Ludopedia
+            url: https://ludopedia.com.br/
+            tags: [boardgames]
+          - title: Boardgame Arena
+            url: https://en.boardgamearena.com
+            tags: [online, boardgame]
+      - name: RPG
+        items:
+          - title: Roll20
+            url: https://app.roll20.net
+            tags: [rpg, web player]
+          - title: donjon
+            url: https://donjon.bin.sh/
+            tags: [dnd, generator]
+          - title: Kassoon
+            url: https://www.kassoon.com/dnd/
+            tags: [dnd, generator]
+          - title: Watabou Tools
+            url: https://watabou.itch.io
+            tags: [rpg, generator]
+          - title: Azgaar's Fantasy Map Generator
+            url: https://azgaar.github.io/Fantasy-Map-Generator/
+            tags: [mapa, rpg]
+          - title: Character Name Generator
+            url: https://blog.reedsy.com/character-name-generator/
+            tags: [nomes, escrita]
+          - title: AnyDice
+            url: https://anydice.com/
+            tags: [dados, rpg]
+
+  - name: Ferramentas e Utilitários
+    lists:
+      - name: Design e Criação
+        items:
+          - title: Carbon
+            url: https://carbon.now.sh/
+            tags: [código, design]
+          - title: Piskel
+            url: https://www.piskelapp.com/
+            tags: [pixel art]
+          - title: Pixlr
+            url: https://pixlr.com/br/suite/
+            tags: [photo, editor, design]
+          - title: Dashboard Icons
+            url: https://dashboardicons.com/icons
+            tags: [icons]
+          - title: Imgflip Meme Generator
+            url: https://imgflip.com/memegenerator
+            tags: [meme, generator]
+          - title: Fooocus Colab Notebook
+            url: https://colab.research.google.com/github/lllyasviel/Fooocus/blob/main/fooocus_colab.ipynb
+            tags: [ai, image, colab]
+      - name: Multi-tools
+        items:
+          - title: PrepostSEO
+            url: https://www.prepostseo.com/
+            tags: [texto]
+          - title: Invertexto
+            url: https://www.invertexto.com/
+            tags: [texto, email]
+      - name: PDF & Documentos
+        items:
+          - title: Bookletify
+            url: https://wieke.gitlab.io/bookletify/
+            tags: [PDF, booklet]
+          - title: I Love PDF
+            url: https://www.ilovepdf.com
+            tags: [PDF]
+
+  - name: Diversos
+    lists:
+      - name: Curiosidades e Aleatórios
+        items:
+          - title: Random Colour
+            url: https://randomcolour.com/
+            tags: [cores, aleatório]
+          - title: The Useless Web
+            url: https://theuselessweb.com/
+            tags: [aleatório]
+          - title: Fake Update
+            url: https://fakeupdate.net/
+            tags: [aleatório]
+          - title: Pirataria.link
+            url: https://pirataria.link/
+            tags: [links, pirataria]
+
+  - name: Jogos
+    lists:
+      - name: Lojas
+        items:
+          - title: Steam
+            url: https://steamcommunity.com/profiles/76561198366406763/
+            tags: [games]
+          - title: Itch.io
+            url: https://itch.io/my-collections
+            tags: [games]
+          - title: GG Deals
+            url: https://gg.deals/
+            tags: [comparador]
+      - name: Online
+        items:
+          - title: Krunker
+            url: https://krunker.io/
+            tags: [fps, multiplayer]
+          - title: The Wiki Game
+            url: https://www.thewikigame.com/
+            tags: [multiplayer, online]
+          - title: Geotastic
+            url: https://geotastic.net
+            tags: [trivia, geo]
+      - name: Geogames
+        items:
+          - title: WhenTaken
+            url: https://whentaken.com/game
+            tags: [geo, guessing]
+          - title: WhereTaken
+            url: https://wheretaken.com/game
+            tags: [geo, guessing]
+          - title: Countryle
+            url: https://www.countryle.com/
+            tags: [geo, puzzle]
+          - title: Worldle
+            url: https://worldle.teuteuf.fr/
+            tags: [geo, puzzle]
+          - title: Travle
+            url: https://travle.earth/
+            tags: [geo, puzzle]
+          - title: Geogrid Game
+            url: https://www.geogridgame.com/
+            tags: [geo, puzzle]
+          - title: Globle
+            url: https://globle-game.com/game
+            tags: [geo, puzzle]
+          - title: Globle Capitals
+            url: https://globle-capitals.com/game
+            tags: [geo, puzzle]
+          - title: Flaggle
+            url: https://www.flaggle.net/
+            tags: [geo, flags]
+      - name: Palavras e Desafios
+        items:
+          - title: Termo
+            url: https://term.ooo
+            tags: [words, puzzle]
+          - title: Conexo
+            url: https://conexo.ws/pt/daily
+            tags: [words, puzzle]
+          - title: The Hexle
+            url: https://www.thehexle.io/
+            tags: [puzzle]
+          - title: Framed
+            url: https://framed.wtf/
+            tags: [movies, guessing]
+          - title: Palavras Cruzadas O Globo
+            url: https://oglobo.globo.com/jogos/palavras-cruzadas/
+            tags: [crossword, puzzle]
+      - name: Indies & Diversos
+        items:
+          - title: Dawnville
+            url: https://sorensaket.itch.io/dawnville
+            tags: [tower-defense, idle]
+          - title: Tanuki Sunset
+            url: https://squidsquadgames.itch.io/tanuki-sunset
+            tags: [chill, synthwave]
+          - title: Keybr
+            url: https://www.keybr.com/
+            tags: [treino]
+          - title: OverTheWire Bandit
+            url: https://overthewire.org/wargames/bandit/bandit0.html
+            tags: [hacking, desafios]
+
+

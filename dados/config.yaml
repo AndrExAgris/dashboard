@@ -1,0 +1,20 @@
+# Painel · configuração geral
+# O nome que aparece no canto da barra superior
+titulo: Painel
+
+# Discos do monitor. O caminho é visto de dentro do container:
+# a raiz do host está montada em /host/root, então um HD montado em
+# /mnt/midias no host aparece em /host/root/mnt/midias.
+discos:
+  - nome: Sistema
+    caminho: /host/root
+  - nome: Mídia
+    caminho: /host/root/mnt/midias
+
+rede:
+  # Vazio soma todas as interfaces físicas (ignora lo, docker, veth, tailscale...).
+  # Para escolher, liste os nomes, por exemplo: [enp3s0]
+  interfaces: []
+
+# Testa a cada minuto se cada serviço e projeto responde
+verificar_servicos: true

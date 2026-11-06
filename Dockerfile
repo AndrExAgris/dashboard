@@ -1,25 +1,13 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
-# Instalar dependências do sistema
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    linux-headers
-
-# Criar diretório de trabalho
 WORKDIR /app
 
-# Copiar arquivos do projeto
+# Só dependências em JavaScript puro: não precisa mais de python, make e g++
 COPY package*.json ./
-RUN npm install
+RUN npm install --omit=dev && npm cache clean --force
 
-# Copiar código da aplicação
 COPY server.js ./
 COPY public/ ./public/
 
-# Expor porta
 EXPOSE 3000
-
-# Comando para iniciar
 CMD ["node", "server.js"]

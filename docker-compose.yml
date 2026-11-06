@@ -1,36 +1,31 @@
-version: '3.8'
-
 services:
-  dashboard:
+  painel:
     build: .
-    container_name: system-dashboard
+    container_name: painel
     ports:
       - "3000:3000"
     volumes:
-      # Montar arquivos YAML externos
-      - ./dashboard.yaml:/app/data/dashboard.yaml:ro
-      - ./bookmarks.yaml:/app/data/bookmarks.yaml:ro
-      # Montar sistema de arquivos para monitoramento (read-only)
+      # A pasta inteira, não arquivo por arquivo: assim salvar o YAML
+      # pelo editor nunca deixa o container com a versão antiga
+      - ./dados:/app/data:ro
+      # /proc do host: a rede é lida de /host/proc/1/net/dev
       - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host/root:ro
-      # Montar pontos de montagem específicos
-      - /boot/efi:/mnt/sistema:ro
-      - /mnt/midias:/mnt/midia:ro
+      # Raiz do host para os discos. rslave faz um HD montado depois
+      # que o container subiu aparecer aqui também
+      - type: bind
+        source: /
+        target: /host/root
+        read_only: true
+        bind:
+          propagation: rslave
     environment:
       - HOST_PROC=/host/proc
-      - HOST_SYS=/host/sys
       - HOST_ROOT=/host/root
-      # Definir discos a monitorar
-      - DISK1_PATH=/mnt/sistema
-      - DISK2_PATH=/mnt/midia
-      - DISK1_NAME=Sistema
-      - DISK2_NAME=Midia
     restart: unless-stopped
-    privileged: true # Necessário para acessar informações do sistema
+    # Continua na rede própria: só o monitor lê a rede do host
     networks:
-      - dashboard-net
+      - painel-net
 
 networks:
-  dashboard-net:
+  painel-net:
     driver: bridge

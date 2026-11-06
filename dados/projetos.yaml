@@ -1,0 +1,52 @@
+# Painel · projetos
+# Campos:
+#   nome       obrigatório
+#   icone      emoji ou URL de imagem (sem ícone, usa a primeira letra)
+#   descricao  uma ou duas frases
+#   url        endereço do projeto (sem url, o cartão aparece sem link)
+#   repo       "usuario/repositorio" do GitHub ou URL completa
+#   tags       lista curta
+#   verificar  false para não testar se está no ar
+#
+# Portas do repositório Tools (cada projeto grande tem a sua, os pequenos dividem a 8100):
+#   8100 projetos-html (/recomendador-anilist/, /recomendador-filmes/)
+#   8120 albion-market-tool · 8130 recomendador-livros · 8140 recomendador-steam
+# O Simulador de mundo não está no Tools: confira a porta dele.
+
+projetos:
+  - nome: Recomendador AniList
+    icone: 📚
+    descricao: Recomenda mangás e animes a partir das minhas listas do AniList e avisa de continuações que eu não vi.
+    url: http://100.100.1.1:8100/recomendador-anilist/
+    tags: [recomendador, anime, mangá]
+
+  - nome: Recomendador de filmes
+    icone: 🎬
+    descricao: Recomenda filmes a partir do export do Letterboxd, por usuários parecidos e por conteúdo.
+    url: http://100.100.1.1:8100/recomendador-filmes/
+    tags: [recomendador, filmes]
+
+  - nome: Recomendador de livros
+    icone: 📖
+    descricao: Recomenda livros a partir da minha estante do Skoob, por conteúdo, e mostra o próximo livro das séries que comecei.
+    url: http://100.100.1.1:8130
+    tags: [recomendador, livros]
+
+  - nome: Recomendador Steam
+    icone: 🎮
+    descricao: Estima quanto gostei de cada jogo da Steam pelas horas e conquistas e recomenda jogos novos pelas tags.
+    url: http://100.100.1.1:8140
+    tags: [recomendador, jogos, steam]
+
+  - nome: Simulador de mundo
+    icone: 🌍
+    descricao: Gera um planeta inteiro, da geologia ao clima, para servir de base a campanhas e histórias.
+    url: http://100.100.1.1:8110
+    tags: [simulação, rpg]
+
+  - nome: Albion Market Tool
+    icone: ⚖️
+    descricao: Arbitragem de mercado entre as cidades do Albion Online, com preços em tempo real.
+    url: http://100.100.1.1:8120
+    repo: AndrExAgris/Albion_market_tool
+    tags: [albion, mercado]

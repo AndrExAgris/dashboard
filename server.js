@@ -1,397 +1,367 @@
+'use strict';
+
+/* =====================================================================
+   Painel · servidor
+   Serve a página, lê os YAMLs da pasta de dados e transmite o monitor
+   do sistema por WebSocket a cada 2 segundos.
+   ===================================================================== */
+
 const express = require('express');
-const cors = require('cors');
-const fs = require('fs').promises;
+const http = require('http');
+const os = require('os');
 const path = require('path');
+const fsp = require('fs').promises;
 const yaml = require('js-yaml');
 const si = require('systeminformation');
 const WebSocket = require('ws');
-const http = require('http');
+
+const PORTA = Number(process.env.PORT) || 3000;
+const DADOS = process.env.DADOS_DIR || path.join(__dirname, 'data');
+const HOST_PROC = process.env.HOST_PROC || '/host/proc';
+const HOST_ROOT = process.env.HOST_ROOT || '/host/root';
+const PASTA_FUNDOS = path.join(__dirname, 'public', 'images');
+
+const INTERVALO_MONITOR = 2000;   // uma amostra a cada 2 s
+const TAMANHO_HISTORICO = 90;     // 90 amostras = 3 minutos de gráfico
+const INTERVALO_DISCOS = 10000;   // disco muda devagar, 10 s basta
+const INTERVALO_SERVICOS = 60000; // testa os serviços a cada minuto
+
+const CONFIG_PADRAO = {
+    titulo: 'Painel',
+    discos: [{ nome: 'Sistema', caminho: HOST_ROOT }],
+    rede: { interfaces: [] },
+    verificar_servicos: true
+};
+
+/* ---------- YAML: relê assim que o arquivo muda ---------- */
+
+const cacheYaml = new Map();
+
+async function lerYaml(nome) {
+    const arquivo = path.join(DADOS, nome);
+    const anterior = cacheYaml.get(nome);
+    let mtime;
+    try {
+        mtime = (await fsp.stat(arquivo)).mtimeMs;
+    } catch (e) {
+        return { dados: null, erro: e.code === 'ENOENT' ? null : e.message };
+    }
+    if (anterior && anterior.mtime === mtime) return anterior.resultado;
+
+    let resultado;
+    try {
+        resultado = { dados: yaml.load(await fsp.readFile(arquivo, 'utf8')), erro: null };
+    } catch (e) {
+        // Arquivo com erro: mostra o aviso, mas continua com a última versão boa
+        const msg = e.mark ? `linha ${e.mark.line + 1}: ${e.reason}` : e.message;
+        console.error(`[yaml] ${nome}: ${msg}`);
+        resultado = { dados: anterior ? anterior.ultimaBoa : null, erro: msg };
+    }
+    cacheYaml.set(nome, {
+        mtime,
+        resultado,
+        ultimaBoa: resultado.erro ? (anterior && anterior.ultimaBoa) : resultado.dados
+    });
+    return resultado;
+}
+
+async function lerConfig() {
+    const { dados } = await lerYaml('config.yaml');
+    const c = dados || {};
+    return {
+        ...CONFIG_PADRAO,
+        ...c,
+        discos: Array.isArray(c.discos) && c.discos.length ? c.discos : CONFIG_PADRAO.discos,
+        rede: { ...CONFIG_PADRAO.rede, ...(c.rede || {}) }
+    };
+}
+
+const lista = (v) => (Array.isArray(v) ? v : []);
+
+/* ---------- Discos: statfs no caminho, sem depender do df ---------- */
+
+let discosCache = [];
+
+async function lerDiscos() {
+    const { discos } = await lerConfig();
+    const resultado = await Promise.all(discos.map(async (d) => {
+        try {
+            const [s, st] = await Promise.all([fsp.statfs(d.caminho), fsp.stat(d.caminho)]);
+            const total = s.blocks * s.bsize;
+            const livre = s.bavail * s.bsize;
+            const usado = (s.blocks - s.bfree) * s.bsize;
+            const percentual = usado + livre > 0 ? (usado / (usado + livre)) * 100 : 0;
+            return { nome: d.nome, total, usado, livre, percentual: +percentual.toFixed(1), dispositivo: st.dev };
+        } catch (e) {
+            const erro = e.code === 'ENOENT'
+                ? `O caminho ${d.caminho} não existe dentro do container`
+                : `Não consegui ler ${d.caminho} (${e.code || e.message})`;
+            return { nome: d.nome, erro };
+        }
+    }));
+
+    // Dois discos no mesmo dispositivo quase sempre significa que o HD
+    // não estava montado e a pasta vazia caiu no disco do sistema.
+    const vistos = new Map();
+    for (const d of resultado) {
+        if (d.dispositivo === undefined) continue;
+        if (vistos.has(d.dispositivo)) {
+            d.aviso = `Está no mesmo disco que "${vistos.get(d.dispositivo)}". Confira se ele está montado no host.`;
+        } else {
+            vistos.set(d.dispositivo, d.nome);
+        }
+        delete d.dispositivo;
+    }
+    discosCache = resultado;
+}
+
+/* ---------- Rede: lê a rede do host, não a do container ---------- */
+
+// Interfaces virtuais que só duplicariam o tráfego da placa física
+const VIRTUAIS = /^(lo|docker|br-|veth|virbr|vnet|tailscale|tun|tap|wg|zt|cni|flannel|kube|ifb|dummy)/;
+let redeAnterior = null;
+
+function interpretarNetDev(texto) {
+    const interfaces = {};
+    for (const linha of texto.split('\n').slice(2)) {
+        const i = linha.indexOf(':');
+        if (i < 0) continue;
+        const nome = linha.slice(0, i).trim();
+        const campos = linha.slice(i + 1).trim().split(/\s+/).map(Number);
+        interfaces[nome] = { rx: campos[0], tx: campos[8] };
+    }
+    return interfaces;
+}
+
+async function lerRede(escolhidas) {
+    let texto;
+    let fonte = 'host';
+    try {
+        // /proc/1 é o init do host: o net/dev dele mostra a rede de verdade
+        texto = await fsp.readFile(path.join(HOST_PROC, '1/net/dev'), 'utf8');
+    } catch {
+        texto = await fsp.readFile('/proc/net/dev', 'utf8');
+        fonte = 'container';
+    }
+
+    const todas = interpretarNetDev(texto);
+    const nomes = lista(escolhidas).length
+        ? lista(escolhidas).filter((n) => todas[n])
+        : Object.keys(todas).filter((n) => !VIRTUAIS.test(n));
+
+    let rx = 0;
+    let tx = 0;
+    for (const n of nomes) { rx += todas[n].rx; tx += todas[n].tx; }
+
+    const agora = Date.now();
+    let download = 0;
+    let upload = 0;
+    if (redeAnterior && redeAnterior.chave === nomes.join(',')) {
+        const dt = (agora - redeAnterior.t) / 1000;
+        if (dt > 0) {
+            download = Math.max(0, (rx - redeAnterior.rx) / dt); // contador zerado vira 0, não negativo
+            upload = Math.max(0, (tx - redeAnterior.tx) / dt);
+        }
+    }
+    redeAnterior = { t: agora, rx, tx, chave: nomes.join(',') };
+    return { download, upload, interfaces: nomes, fonte };
+}
+
+/* ---------- Monitor ---------- */
+
+let amostraAtual = null;
+const historico = [];
+let coletando = false;
+
+async function coletar() {
+    if (coletando) return;
+    coletando = true;
+    try {
+        const config = await lerConfig();
+        const [carga, temperatura, memoria, rede] = await Promise.all([
+            si.currentLoad(),
+            si.cpuTemperature().catch(() => ({})),
+            si.mem(),
+            lerRede(config.rede.interfaces).catch((e) => ({ download: 0, upload: 0, interfaces: [], fonte: 'erro', erro: e.message }))
+        ]);
+
+        const t = Date.now();
+        amostraAtual = {
+            t,
+            cpu: {
+                uso: +carga.currentLoad.toFixed(1),
+                temperatura: temperatura.main > 0 ? Math.round(temperatura.main) : null,
+                nucleos: (carga.cpus || []).length
+            },
+            memoria: {
+                total: memoria.total,
+                usada: memoria.active,
+                percentual: +((memoria.active / memoria.total) * 100).toFixed(1)
+            },
+            discos: discosCache,
+            rede,
+            ligadoHa: os.uptime()
+        };
+
+        historico.push({ t, cpu: amostraAtual.cpu.uso, rx: rede.download, tx: rede.upload });
+        if (historico.length > TAMANHO_HISTORICO) historico.shift();
+
+        transmitir({ tipo: 'amostra', amostra: amostraAtual });
+    } catch (e) {
+        console.error('[monitor]', e.message);
+    } finally {
+        coletando = false;
+    }
+}
+
+/* ---------- Serviços e projetos: estão no ar? ---------- */
+
+const estados = {};
+
+async function testar(url) {
+    const inicio = Date.now();
+    try {
+        const r = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(4000) });
+        r.body?.cancel().catch(() => {});
+        // Qualquer resposta HTTP conta, até 401 ou 404: o serviço respondeu
+        return { online: true, codigo: r.status, ms: Date.now() - inicio };
+    } catch (e) {
+        const causa = e.cause && e.cause.code ? String(e.cause.code) : '';
+        // Certificado autoassinado também significa que o serviço respondeu
+        if (/CERT|TLS|SSL/.test(causa)) return { online: true, ms: Date.now() - inicio };
+        return { online: false, motivo: causa || e.name };
+    }
+}
+
+async function verificarServicos() {
+    const config = await lerConfig();
+    if (!config.verificar_servicos) return;
+    const [servidor, projetos] = await Promise.all([lerYaml('dashboard.yaml'), lerYaml('projetos.yaml')]);
+    const itens = [
+        ...lista(servidor.dados && servidor.dados.Dashboard),
+        ...lista(projetos.dados && projetos.dados.projetos)
+    ].filter((i) => i && i.verificar !== false && /^https?:\/\//.test(i.verificar_url || i.url || ''));
+
+    const vistos = new Set();
+    await Promise.all(itens.map(async (i) => {
+        if (vistos.has(i.url)) return;
+        vistos.add(i.url);
+        estados[i.url] = { ...(await testar(i.verificar_url || i.url)), em: Date.now() };
+    }));
+}
+
+/* ---------- HTTP ---------- */
 
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ 
-    server,
-    // Configurações otimizadas para WebSocket
-    perMessageDeflate: {
-        threshold: 1024,
-        concurrencyLimit: 10,
-    },
-    maxPayload: 16 * 1024 * 1024 // 16MB
-});
-
-// Configurações
-const PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, 'data');
-const DISK1_PATH = process.env.DISK1_PATH || '/';
-const DISK2_PATH = process.env.DISK2_PATH || '/mnt/storage';
-const DISK1_NAME = process.env.DISK1_NAME || 'Sistema';
-const DISK2_NAME = process.env.DISK2_NAME || 'Storage';
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-// Servir arquivos estáticos incluindo imagens
+app.disable('x-powered-by');
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Cache otimizado para dados YAML
-let yamlCache = {
-    dashboard: null,
-    bookmarks: null,
-    lastUpdate: 0,
-    isUpdating: false
-};
-
-// Cache para dados do sistema
-let systemDataCache = {
-    data: null,
-    lastUpdate: 0
-};
-
-// Função otimizada para carregar arquivos YAML
-async function loadYamlFile(filename) {
-    try {
-        const filePath = path.join(DATA_DIR, filename);
-        const stats = await fs.stat(filePath);
-        const fileContent = await fs.readFile(filePath, 'utf8');
-        const data = yaml.load(fileContent);
-        return { data, mtime: stats.mtime.getTime() };
-    } catch (error) {
-        console.error(`Erro ao carregar ${filename}:`, error.message);
-        return { data: null, mtime: 0 };
-    }
-}
-
-// Atualizar cache de YAML com verificação de modificação
-async function updateYamlCache() {
-    const now = Date.now();
-    
-    // Evita atualizações concorrentes
-    if (yamlCache.isUpdating) return;
-    
-    // Atualiza cache a cada 30 segundos ou se nunca foi carregado
-    if (now - yamlCache.lastUpdate > 30000 || !yamlCache.dashboard) {
-        yamlCache.isUpdating = true;
-        
+function rota(caminho, fn) {
+    app.get(caminho, async (req, res) => {
         try {
-            const [dashboardResult, bookmarksResult] = await Promise.all([
-                loadYamlFile('dashboard.yaml'),
-                loadYamlFile('bookmarks.yaml')
-            ]);
-            
-            yamlCache.dashboard = dashboardResult.data || { Dashboard: [] };
-            yamlCache.bookmarks = bookmarksResult.data || { categories: [] };
-            yamlCache.lastUpdate = now;
-        } catch (error) {
-            console.error('Erro ao atualizar cache YAML:', error);
-        } finally {
-            yamlCache.isUpdating = false;
+            res.json(await fn(req));
+        } catch (e) {
+            console.error(`[${caminho}]`, e);
+            res.status(500).json({ erro: 'Erro interno do servidor' });
         }
+    });
+}
+
+rota('/api/config', async () => {
+    const c = await lerConfig();
+    return { titulo: c.titulo };
+});
+
+rota('/api/servidor', async () => {
+    const { dados, erro } = await lerYaml('dashboard.yaml');
+    return { itens: lista(dados && dados.Dashboard), erro };
+});
+
+rota('/api/projetos', async () => {
+    const { dados, erro } = await lerYaml('projetos.yaml');
+    return { projetos: lista(dados && dados.projetos), erro };
+});
+
+rota('/api/favoritos', async () => {
+    const { dados, erro } = await lerYaml('bookmarks.yaml');
+    return { categorias: lista(dados && dados.categories), erro };
+});
+
+rota('/api/estado', async () => estados);
+
+rota('/api/fundos', async () => {
+    const arquivos = await fsp.readdir(PASTA_FUNDOS).catch(() => []);
+    return arquivos
+        .filter((a) => /\.(gif|webp|png|jpe?g)$/i.test(a))
+        .map((a) => `/images/${encodeURIComponent(a)}`);
+});
+
+rota('/api/sistema', async () => ({ amostra: amostraAtual, historico }));
+
+rota('/api/saude', async () => ({
+    status: 'ok',
+    ligadoHa: process.uptime(),
+    clientes: wss.clients.size
+}));
+
+/* ---------- WebSocket ---------- */
+
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server, path: '/ws', perMessageDeflate: { threshold: 1024 } });
+
+function transmitir(mensagem) {
+    if (wss.clients.size === 0) return;
+    const texto = JSON.stringify(mensagem);
+    for (const c of wss.clients) {
+        if (c.readyState === WebSocket.OPEN) c.send(texto);
     }
 }
 
-// Rotas API com cache
-app.get('/api/dashboard', async (req, res) => {
-    try {
-        await updateYamlCache();
-        res.json(yamlCache.dashboard || { Dashboard: [] });
-    } catch (error) {
-        console.error('Erro na rota /api/dashboard:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
-    }
+wss.on('connection', (ws) => {
+    ws.vivo = true;
+    ws.on('pong', () => { ws.vivo = true; });
+    ws.on('error', (e) => console.error('[ws]', e.message));
+    ws.send(JSON.stringify({ tipo: 'inicio', amostra: amostraAtual, historico }));
 });
 
-app.get('/api/bookmarks', async (req, res) => {
-    try {
-        await updateYamlCache();
-        res.json(yamlCache.bookmarks || { categories: [] });
-    } catch (error) {
-        console.error('Erro na rota /api/bookmarks:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+// Derruba conexões que pararam de responder
+const batimento = setInterval(() => {
+    for (const ws of wss.clients) {
+        if (!ws.vivo) { ws.terminate(); continue; }
+        ws.vivo = false;
+        ws.ping();
     }
-});
+}, 30000);
 
-// Função otimizada para obter informações do sistema
-async function getSystemInfo() {
-    const now = Date.now();
-    
-    // Cache de 1 segundo para evitar múltiplas chamadas simultâneas
-    if (systemDataCache.data && (now - systemDataCache.lastUpdate) < 1000) {
-        return systemDataCache.data;
+/* ---------- Início e encerramento ---------- */
+
+async function iniciar() {
+    await lerDiscos();
+    for (const d of discosCache) {
+        if (d.erro) console.warn(`[disco] ${d.nome}: ${d.erro}`);
+        else console.log(`[disco] ${d.nome}: ${(d.total / 1e9).toFixed(1)} GB${d.aviso ? ` (${d.aviso})` : ''}`);
     }
+    await coletar();
+    console.log(`[rede] lendo a rede do ${amostraAtual ? amostraAtual.rede.fonte : '?'}: ${amostraAtual ? amostraAtual.rede.interfaces.join(', ') : ''}`);
 
-    try {
-        // Executar chamadas em paralelo para melhor performance
-        const [cpuLoad, cpuTemp, mem, disks, processes, networkStats] = await Promise.all([
-            si.currentLoad(),
-            si.cpuTemperature().catch(() => ({ main: 0 })), // Fallback se temperatura não disponível
-            si.mem(),
-            si.fsSize(),
-            si.processes(),
-            si.networkStats().catch(() => [{ rx_sec: 0, tx_sec: 0 }]) // Fallback para rede
-        ]);
-        
-        // Encontrar discos específicos de forma mais eficiente
-        const disk1 = disks.find(d => d.mount === DISK1_PATH) || disks[0] || {
-            size: 0, used: 0, available: 0, use: 0
-        };
-        
-        const disk2 = disks.find(d => d.mount === DISK2_PATH) || {
-            size: 0, used: 0, available: 0, use: 0
-        };
-        
-        const primaryNetwork = networkStats[0] || { rx_sec: 0, tx_sec: 0 };
-        
-        const systemData = {
-            cpu: {
-                usage: parseFloat(cpuLoad.currentLoad.toFixed(1)),
-                temp: cpuTemp.main || 0,
-                cores: cpuLoad.cpus ? cpuLoad.cpus.map(c => parseFloat(c.load.toFixed(1))) : []
-            },
-            memory: {
-                total: mem.total,
-                used: mem.active, // Usando mem.active que é mais preciso
-                free: mem.free,
-                percent: parseFloat(((mem.active / mem.total) * 100).toFixed(1))
-            },
-            disk1: {
-                name: DISK1_NAME,
-                total: disk1.size,
-                used: disk1.used,
-                free: disk1.available,
-                percent: parseFloat((disk1.use || 0).toFixed(1))
-            },
-            disk2: {
-                name: DISK2_NAME,
-                total: disk2.size,
-                used: disk2.used,
-                free: disk2.available,
-                percent: parseFloat((disk2.use || 0).toFixed(1))
-            },
-            processes: {
-                total: processes.all || 0,
-                running: processes.running || 0,
-                sleeping: processes.sleeping || 0
-            },
-            network: {
-                download: primaryNetwork.rx_sec || 0,
-                upload: primaryNetwork.tx_sec || 0
-            },
-            timestamp: now
-        };
+    setInterval(coletar, INTERVALO_MONITOR);
+    setInterval(() => lerDiscos().catch((e) => console.error('[disco]', e.message)), INTERVALO_DISCOS);
+    verificarServicos().catch((e) => console.error('[serviços]', e.message));
+    setInterval(() => verificarServicos().catch((e) => console.error('[serviços]', e.message)), INTERVALO_SERVICOS);
 
-        // Atualizar cache
-        systemDataCache.data = systemData;
-        systemDataCache.lastUpdate = now;
-        
-        return systemData;
-        
-    } catch (error) {
-        console.error('Erro ao obter informações do sistema:', error.message);
-        
-        // Retornar dados padrão em caso de erro
-        const fallbackData = {
-            cpu: { usage: 0, temp: 0, cores: [] },
-            memory: { total: 0, used: 0, free: 0, percent: 0 },
-            disk1: { name: DISK1_NAME, total: 0, used: 0, free: 0, percent: 0 },
-            disk2: { name: DISK2_NAME, total: 0, used: 0, free: 0, percent: 0 },
-            processes: { total: 0, running: 0, sleeping: 0 },
-            network: { download: 0, upload: 0 },
-            timestamp: now
-        };
-        
-        systemDataCache.data = fallbackData;
-        systemDataCache.lastUpdate = now;
-        
-        return fallbackData;
-    }
+    server.listen(PORTA, '0.0.0.0', () => console.log(`Painel em http://localhost:${PORTA}`));
 }
 
-// Set para rastrear clientes conectados
-const connectedClients = new Set();
-
-// WebSocket otimizado para atualizações em tempo real
-wss.on('connection', (ws, req) => {
-    console.log(`Cliente WebSocket conectado (${connectedClients.size + 1} total)`);
-    connectedClients.add(ws);
-    
-    // Enviar dados iniciais
-    getSystemInfo().then(data => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(data));
-        }
-    }).catch(error => {
-        console.error('Erro ao enviar dados iniciais:', error);
-    });
-    
-    // Configurar ping/pong para manter conexão viva
-    let isAlive = true;
-    ws.on('pong', () => { isAlive = true; });
-    
-    const pingInterval = setInterval(() => {
-        if (!isAlive) {
-            console.log('Cliente não respondeu ao ping, terminando conexão');
-            ws.terminate();
-            return;
-        }
-        
-        isAlive = false;
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.ping();
-        }
-    }, 30000); // Ping a cada 30 segundos
-    
-    ws.on('close', () => {
-        console.log(`Cliente WebSocket desconectado (${connectedClients.size - 1} restantes)`);
-        connectedClients.delete(ws);
-        clearInterval(pingInterval);
-    });
-    
-    ws.on('error', (error) => {
-        console.error('Erro no WebSocket do cliente:', error.message);
-        connectedClients.delete(ws);
-        clearInterval(pingInterval);
-    });
-});
-
-// Broadcast otimizado para todos os clientes conectados
-async function broadcastSystemData() {
-    if (connectedClients.size === 0) return;
-    
-    try {
-        const data = await getSystemInfo();
-        const message = JSON.stringify(data);
-        
-        // Enviar para todos os clientes conectados
-        const deadClients = [];
-        
-        for (const client of connectedClients) {
-            if (client.readyState === WebSocket.OPEN) {
-                try {
-                    client.send(message);
-                } catch (error) {
-                    console.error('Erro ao enviar dados para cliente:', error);
-                    deadClients.push(client);
-                }
-            } else {
-                deadClients.push(client);
-            }
-        }
-        
-        // Remover clientes mortos
-        deadClients.forEach(client => connectedClients.delete(client));
-        
-    } catch (error) {
-        console.error('Erro no broadcast:', error);
-    }
+function encerrar(sinal) {
+    console.log(`${sinal} recebido, encerrando`);
+    clearInterval(batimento);
+    for (const c of wss.clients) c.close(1001, 'Servidor desligando');
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 5000).unref();
 }
 
-// Iniciar broadcast a cada 2 segundos apenas se houver clientes
-setInterval(broadcastSystemData, 2000);
+process.on('SIGTERM', () => encerrar('SIGTERM'));
+process.on('SIGINT', () => encerrar('SIGINT'));
+process.on('unhandledRejection', (motivo) => console.error('Promise rejeitada sem tratamento:', motivo));
 
-// Rota para obter background aleatório
-app.get('/api/random-background', async (req, res) => {
-    try {
-        const imagesDir = path.join(__dirname, 'public', 'images');
-        
-        // Verificar se o diretório existe
-        try {
-            await fs.access(imagesDir);
-        } catch {
-            return res.json({ backgroundUrl: null });
-        }
-        
-        const files = await fs.readdir(imagesDir);
-        const gifFiles = files.filter(file => 
-            file.toLowerCase().endsWith('.gif')
-        );
-        
-        if (gifFiles.length === 0) {
-            return res.json({ backgroundUrl: null });
-        }
-        
-        // Selecionar GIF aleatório
-        const randomGif = gifFiles[Math.floor(Math.random() * gifFiles.length)];
-        const backgroundUrl = `/images/${randomGif}`;
-        
-        res.json({ backgroundUrl });
-        
-    } catch (error) {
-        console.error('Erro ao obter background aleatório:', error);
-        res.json({ backgroundUrl: null });
-    }
-});
-
-// Rota de API para informações do sistema (fallback)
-app.get('/api/system', async (req, res) => {
-    try {
-        const data = await getSystemInfo();
-        res.json(data);
-    } catch (error) {
-        console.error('Erro na rota /api/system:', error);
-        res.status(500).json({ error: 'Erro ao obter dados do sistema' });
-    }
-});
-
-// Rota de health check melhorada
-app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        timestamp: Date.now(),
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-        connectedClients: connectedClients.size
-    });
-});
-
-// Middleware de tratamento de erro global
-app.use((error, req, res, next) => {
-    console.error('Erro não tratado:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
-});
-
-// Iniciar servidor
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Dashboard rodando em http://localhost:${PORT}`);
-    console.log(`Monitorando discos: ${DISK1_NAME} (${DISK1_PATH}) e ${DISK2_NAME} (${DISK2_PATH})`);
-    console.log(`Diretório de imagens: ${path.join(__dirname, 'public', 'images')}`);
-});
-
-// Graceful shutdown melhorado
-const gracefulShutdown = (signal) => {
-    console.log(`${signal} recebido, iniciando shutdown graceful...`);
-    
-    server.close(() => {
-        console.log('Servidor HTTP fechado');
-        
-        // Fechar todas as conexões WebSocket
-        connectedClients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN) {
-                client.close(1000, 'Servidor sendo desligado');
-            }
-        });
-        
-        console.log('Todas as conexões WebSocket fechadas');
-        console.log('Shutdown completo');
-        process.exit(0);
-    });
-    
-    // Forçar saída após 10 segundos se o shutdown não completar
-    setTimeout(() => {
-        console.error('Forçando saída após timeout de shutdown');
-        process.exit(1);
-    }, 10000);
-};
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// Tratamento de exceções não capturadas
-process.on('uncaughtException', (error) => {
-    console.error('Exceção não capturada:', error);
-    gracefulShutdown('UNCAUGHT_EXCEPTION');
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Promise rejection não tratada:', reason);
-    // Não forçar saída aqui, apenas logar
-});
+iniciar();

@@ -94,12 +94,40 @@ document.addEventListener('keydown', (ev) => {
     if (campo) { ev.preventDefault(); campo.focus(); }
 });
 
+/* ---------- DNS dinâmico: tailscale fora de casa, rede local em casa ---------- */
+
+// Trocado pelo valor de rede.prefixo_local do config.yaml antes de desenhar os cartões
+let PREFIXO_LOCAL = '192.168.';
+let EM_CASA = false;
+
+async function detectarRede() {
+    try {
+        const c = await buscarJson('/api/config');
+        titulo = c.titulo || titulo;
+        PREFIXO_LOCAL = c.prefixoLocal || PREFIXO_LOCAL;
+    } catch { /* fica com os padrões */ }
+    EM_CASA = location.hostname.startsWith(PREFIXO_LOCAL);
+    $$('[data-titulo]').forEach((el) => { el.textContent = titulo; });
+    document.title = `${ABAS[abaAtual()]} | ${titulo}`;
+}
+
+// Mesma porta, IP diferente: em casa usa a rede local (sem passar pelo tailscale);
+// fora, usa o tailscale. Itens antigos com só "url" caem nos dois casos.
+function escolherUrl(item) {
+    return EM_CASA
+        ? (item.url_local || item.url_tailscale || item.url)
+        : (item.url_tailscale || item.url_local || item.url);
+}
+
+const chaveServico = (s) => `servico:${s.name}`;
+const chaveProjeto = (p) => `projeto:${p.nome}`;
+
 /* ---------- Estado dos serviços (no ar ou não) ---------- */
 
 let estados = {};
 
-function pontoDeEstado(url) {
-    const e = estados[url];
+function pontoDeEstado(chave) {
+    const e = estados[chave];
     if (!e) return h('span', { class: 'estado', title: 'Ainda não testado' }, h('span', { class: 'so-leitor' }, 'Ainda não testado'));
     return e.online
         ? h('span', { class: 'estado', 'data-estado': 'on', title: e.ms != null ? `Respondeu em ${e.ms} ms` : 'No ar' }, 'No ar')
@@ -119,21 +147,21 @@ async function atualizarEstados() {
 let servicos = [];
 
 function resumirServicos() {
-    const testados = servicos.filter((s) => estados[s.url]);
-    const noAr = testados.filter((s) => estados[s.url].online).length;
+    const testados = servicos.filter((s) => estados[chaveServico(s)]);
+    const noAr = testados.filter((s) => estados[chaveServico(s)].online).length;
     $('[data-resumo-servicos]').textContent = testados.length
         ? `${noAr} de ${testados.length} no ar`
         : '';
 }
 
 function cartaoServico(s) {
-    return h('a', { class: 'cartao cartao-interativo servico', href: s.url, target: '_blank', rel: 'noopener noreferrer' },
+    const chave = chaveServico(s);
+    return h('a', { class: 'cartao cartao-interativo servico', href: escolherUrl(s), target: '_blank', rel: 'noopener noreferrer' },
         miniatura(s, s.name),
         h('div', { style: 'min-width: 0' },
             h('div', { class: 'servico-topo' },
                 h('h2', null, s.name),
-                h('span', { 'data-estado-de': s.url }, pontoDeEstado(s.url))),
-            h('p', { class: 'servico-endereco' }, s.url.replace(/^https?:\/\//, '')),
+                h('span', { 'data-estado-de': chave }, pontoDeEstado(chave))),
             s.descricao ? h('p', { class: 'servico-descricao' }, s.descricao) : null,
             etiquetas(s.tags)));
 }
@@ -142,7 +170,7 @@ async function carregarServidor() {
     const lista = $('[data-lista-servicos]');
     try {
         const { itens, erro } = await buscarJson('/api/servidor');
-        servicos = itens.filter((s) => s && s.url && s.name);
+        servicos = itens.filter((s) => s && s.name && (s.url || s.url_tailscale || s.url_local));
         mostrarAviso('servidor', erro ? `O dashboard.yaml tem um erro (${erro}). Mostrando a última versão que funcionou.` : null);
         lista.replaceChildren(...(servicos.length
             ? servicos.map(cartaoServico)
@@ -322,8 +350,11 @@ function conectarMonitor() {
 let projetos = [];
 
 function cartaoProjeto(p) {
-    const nome = p.url
-        ? h('a', { class: 'projeto-link', href: p.url, target: '_blank', rel: 'noopener noreferrer' }, p.nome)
+    const temUrl = !!(p.url || p.url_tailscale || p.url_local);
+    const url = temUrl ? escolherUrl(p) : null;
+    const chave = chaveProjeto(p);
+    const nome = url
+        ? h('a', { class: 'projeto-link', href: url, target: '_blank', rel: 'noopener noreferrer' }, p.nome)
         : p.nome;
     const repo = p.repo
         ? h('a', {
@@ -337,12 +368,12 @@ function cartaoProjeto(p) {
         h('div', { class: 'projeto-topo' },
             miniatura(p, p.nome),
             h('h3', null, nome),
-            p.url ? h('span', { 'data-estado-de': p.url }, pontoDeEstado(p.url)) : null),
+            temUrl ? h('span', { 'data-estado-de': chave }, pontoDeEstado(chave)) : null),
         p.descricao ? h('p', { class: 'projeto-descricao' }, p.descricao) : null,
         etiquetas(p.tags),
-        (repo || !p.url) ? h('div', { class: 'projeto-rodape' },
+        (repo || !temUrl) ? h('div', { class: 'projeto-rodape' },
             repo,
-            p.url ? null : h('span', { class: 'projeto-sem-link' }, 'Ainda sem endereço')) : null);
+            temUrl ? null : h('span', { class: 'projeto-sem-link' }, 'Ainda sem endereço')) : null);
 }
 
 function desenharProjetos() {
@@ -492,11 +523,8 @@ async function iniciar() {
     aplicarFundo();
     conectarMonitor();
 
-    buscarJson('/api/config').then((c) => {
-        titulo = c.titulo || titulo;
-        $$('[data-titulo]').forEach((el) => { el.textContent = titulo; });
-        document.title = `${ABAS[abaAtual()]} | ${titulo}`;
-    }).catch(() => {});
+    // Antes dos cartões: eles já nascem com o endereço certo (local ou tailscale)
+    await detectarRede();
 
     await Promise.all([carregarServidor(), carregarProjetos(), carregarFavoritos()]);
     atualizarEstados();

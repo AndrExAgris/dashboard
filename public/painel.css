@@ -99,13 +99,6 @@ main.container { padding-block: var(--e-6) var(--e-8); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.servico-endereco {
-  font-size: var(--t-pequeno);
-  color: var(--cor-texto-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .servico-descricao { margin-top: var(--e-2); color: var(--cor-texto-2); }
 
 .miniatura {

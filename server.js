@@ -29,7 +29,7 @@ const INTERVALO_SERVICOS = 60000; // testa os serviços a cada minuto
 const CONFIG_PADRAO = {
     titulo: 'Painel',
     discos: [{ nome: 'Sistema', caminho: HOST_ROOT }],
-    rede: { interfaces: [] },
+    rede: { interfaces: [], prefixo_local: '192.168.' },
     verificar_servicos: true
 };
 
@@ -233,20 +233,23 @@ async function testar(url) {
     }
 }
 
+// Cada item tem dois endereços (url_tailscale, url_local); o teste do servidor,
+// que roda dentro do container, não depende de rede do navegador: usa o local
+// (está na mesma rede do host) e cai pro tailscale se não houver.
+function urlVerificar(i) { return i.verificar_url || i.url_local || i.url_tailscale || i.url || ''; }
+function chaveItem(prefixo, i) { return `${prefixo}:${i.name || i.nome}`; }
+
 async function verificarServicos() {
     const config = await lerConfig();
     if (!config.verificar_servicos) return;
     const [servidor, projetos] = await Promise.all([lerYaml('dashboard.yaml'), lerYaml('projetos.yaml')]);
     const itens = [
-        ...lista(servidor.dados && servidor.dados.Dashboard),
-        ...lista(projetos.dados && projetos.dados.projetos)
-    ].filter((i) => i && i.verificar !== false && /^https?:\/\//.test(i.verificar_url || i.url || ''));
+        ...lista(servidor.dados && servidor.dados.Dashboard).filter(Boolean).map((i) => ({ chave: chaveItem('servico', i), url: urlVerificar(i), verificar: i.verificar })),
+        ...lista(projetos.dados && projetos.dados.projetos).filter(Boolean).map((i) => ({ chave: chaveItem('projeto', i), url: urlVerificar(i), verificar: i.verificar }))
+    ].filter((i) => i.verificar !== false && /^https?:\/\//.test(i.url));
 
-    const vistos = new Set();
     await Promise.all(itens.map(async (i) => {
-        if (vistos.has(i.url)) return;
-        vistos.add(i.url);
-        estados[i.url] = { ...(await testar(i.verificar_url || i.url)), em: Date.now() };
+        estados[i.chave] = { ...(await testar(i.url)), em: Date.now() };
     }));
 }
 
@@ -269,7 +272,7 @@ function rota(caminho, fn) {
 
 rota('/api/config', async () => {
     const c = await lerConfig();
-    return { titulo: c.titulo };
+    return { titulo: c.titulo, prefixoLocal: c.rede.prefixo_local };
 });
 
 rota('/api/servidor', async () => {

@@ -15,6 +15,13 @@ rede:
   # Vazio soma todas as interfaces físicas (ignora lo, docker, veth, tailscale...).
   # Para escolher, liste os nomes, por exemplo: [enp3s0]
   interfaces: []
+  # Início do endereço da sua rede de casa (confira em "ip a" ou nas
+  # configurações do roteador; costuma ser 192.168. ou 10.). Serve para o
+  # navegador decidir: se o endereço usado para abrir o Painel começa
+  # assim, os cartões de Servidor e Projetos abrem pelo url_local de cada
+  # um; senão, abrem pelo url_tailscale. Veja os dois campos no
+  # dashboard.yaml e no projetos.yaml.
+  prefixo_local: "192.168."
 
 # Testa a cada minuto se cada serviço e projeto responde
 verificar_servicos: true

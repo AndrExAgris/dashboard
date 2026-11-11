@@ -1,0 +1,3 @@
+# Arquivos com os IPs do servidor (Tailscale e rede local), fora do Git
+dados/dashboard.yaml
+dados/projetos.yaml
